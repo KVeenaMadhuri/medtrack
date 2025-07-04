@@ -8,19 +8,19 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
 # ---------- AWS DynamoDB Configuration ----------
-dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Update region if needed
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 users_table = dynamodb.Table('users')
 appointments_table = dynamodb.Table('appointments')
 
 # ---------- AWS SNS Configuration ----------
-sns = boto3.client('sns', region_name='us-east-1')  # Update region if needed
+sns = boto3.client('sns', region_name='us-east-1')
 
-# ---------- Email (SMTP) Configuration ----------
+# ---------- Email Configuration ----------
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'your_email@gmail.com'       # ✅ Your Gmail
-app.config['MAIL_PASSWORD'] = 'your_app_password'          # ✅ Use Gmail App Password
+app.config['MAIL_USERNAME'] = 'your_email@gmail.com'  # ✅ Your Gmail
+app.config['MAIL_PASSWORD'] = 'your_app_password'      # ✅ App password
 
 mail = Mail(app)
 
@@ -35,15 +35,15 @@ def home():
 def register():
     if request.method == 'POST':
         role = request.form['role']
-        username = request.form['username']  # Assuming it's an email
+        username = request.form['email']  # ✅ fixed from 'username'
         password = request.form['password']
 
-        # Check if user exists
+        # Check if user already exists
         response = users_table.get_item(Key={'username': username})
         if 'Item' in response:
             return "User already exists!"
 
-        # Add new user
+        # Save user to DynamoDB
         users_table.put_item(Item={
             'username': username,
             'password': password,
@@ -113,10 +113,8 @@ def book_appointment():
         patient_email = session['username']
         date = request.form['date']
         reason = request.form['reason']
-
         appointment_id = str(uuid.uuid4())
 
-        # Save appointment to DynamoDB
         appointments_table.put_item(Item={
             'appointment_id': appointment_id,
             'doctor_email': doctor_email,
@@ -126,7 +124,6 @@ def book_appointment():
             'timestamp': datetime.utcnow().isoformat()
         })
 
-        # Send Email Notification to Doctor
         try:
             msg = Message(
                 subject="New Appointment Booked",
@@ -138,10 +135,9 @@ def book_appointment():
         except Exception as e:
             print(f"Email error: {e}")
 
-        # Send SMS Notification using SNS (number must be verified in AWS SNS sandbox)
         try:
             sns.publish(
-                PhoneNumber='+15555555555',  # Replace with actual/verified number
+                PhoneNumber='+15555555555',  # Replace with verified phone number
                 Message=f"New appointment: {patient_email} -> {doctor_email} on {date}"
             )
         except Exception as e:
